@@ -57,7 +57,7 @@
       "@type": "cr:FileObject",
       "@id": "github-repository",
       "name": "github-repository",
-      "description": "Indic Persona Hub repository on GitHub (anonymous NeurIPS submission).",
+      "description": "Indic Persona Hub repository on GitHub (anonymous ARR submission).",
       "contentUrl": "https://github.com/anonymous-submitter0104/acl-arr-submission",
       "encodingFormat": "git+https",
       "sha256": "main"
