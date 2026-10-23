@@ -57,7 +57,7 @@
       "@type": "cr:FileObject",
       "@id": "github-repository",
       "name": "github-repository",
-      "description": "Anonymous NeurIPS submission repository on GitHub containing the Indic PersonaHub training corpus.",
+      "description": "Anonymous ARR submission repository on GitHub containing the Indic PersonaHub training corpus.",
       "contentUrl": "https://github.com/anonymous-submitter0104/acl-arr-submission",
       "encodingFormat": "git+https",
       "sha256": "main"
