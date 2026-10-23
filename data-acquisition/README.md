@@ -2,6 +2,20 @@
 
 This section outlines our **data acquisition strategy**, describing the **sources, collection methodology, and filtering criteria** used to build the initial corpus. It also highlights the rationale behind selecting specific datasets, ensuring both **diversity** and **relevance** to downstream tasks.
 
+This folder accompanies the anonymous ACL ARR submission *MILA (Multilingual Indic Language Archive): A Dataset for Equitable Multilingual LLMs*. See Section 3.1 (Data Acquisition and Governance) and Appendix E of the paper for the full acquisition methodology, source audits and statistics.
+
+## How this folder relates to the paper
+
+MILA's acquisition pipeline combines three strands:
+
+* **Large-scale web crawling** of multilingual websites, forums and academic repositories, using high-concurrency, source-specific crawlers (the scrapers documented below).
+* **Institutional and archival digitization**, mainly curated books from Archive.org, curriculum-aligned materials from the National Digital Library of India (NDLI), and Wikimedia projects (Appendix E.1–E.3).
+* **License-compliant open datasets**, including over 1,700 open datasets from Hugging Face.
+
+All sources are normalized under a unified provenance framework: standardized metadata (ISBN / DOI / archive IDs), URL and MD5 deduplication, and record-level identifiers for traceability. Each item carries licensing metadata, and items with restrictive or ambiguous licenses are excluded from the open release (Appendix E and Appendix F.2). Downstream curation (language identification, quality and toxicity filtering, PII redaction, decontamination) is described in Appendix B and the `data-curation` folder.
+
+> **Scope note.** The scrapers below are the source-specific crawlers shipped in this folder. The Archive.org, Wikimedia and metadata-first infrastructure for large collections is described in Appendix E.1, E.3 and E.4 of the paper. Throughput and quality figures in the "Performance Metrics" section are indicative engineering estimates for these scripts and are not results reported in the paper.
+
 ---
 # Table of Contents
 
@@ -287,8 +301,8 @@ wget https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin
 #### Common Crawl Configuration
 ```python
 # Configuration variables in common_crawl_url_warc_to_text.py
-PARQUET_PATH "data/part-00288-88b30a59-3c73-48ba-a167-077611bfd245.c000.gz.parquet" #DEFAULT 
-PARQUET_PATH = "path_to_common_crawl_index.parquet"
+PARQUET_PATH = "data/part-00288-88b30a59-3c73-48ba-a167-077611bfd245.c000.gz.parquet"  # DEFAULT
+# PARQUET_PATH = "path_to_common_crawl_index.parquet"  # or point to your own Common Crawl index
 MAX_CONCURRENT = 100  # Adjust based on system resources
 OUTPUT_FILE = "./warc_text_output/extracted_text.jsonl"
 ```
@@ -320,11 +334,12 @@ CUSTOM_SETTINGS = {
 
 ### Ethical Scraping
 - **Rate Limiting**: Configurable delays between requests
-- **User Agent Rotation**: Respectful identification to servers
-- **Robots.txt Compliance**: Honors website crawling policies
+- **Identifiable User Agent**: Scrapers identify themselves to servers via a configurable user agent
 - **Resource Management**: Efficient memory and connection usage
 
 ## 📊 Performance Metrics
+
+> Indicative engineering estimates for the scripts in this folder; these are not results reported in the paper and depend on hardware, network and target-site behavior.
 
 ### Processing Capabilities
 - **GeeksforGeeks**: ~500 articles/hour with quality filtering
