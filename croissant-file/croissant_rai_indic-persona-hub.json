@@ -51,14 +51,14 @@
   "name": "indic-persona-hub",
   "description": "Dataset Description: Indic Persona Hub (Representative Sample Release)\n\nThe Indic Persona Hub is a large-scale, India-centric dataset of synthetic virtual personas created to support research in natural language processing (NLP), personalization, socially-aware machine learning, synthetic data generation, and dataset augmentation. This repository provides a representative sample release containing 20 million personas, while the complete dataset will be publicly released after paper acceptance.\n\nThe dataset contains 20,000,000 synthetic persona records spanning 90,633 domain buckets, covering a wide range of India-relevant themes such as education, business, healthcare, environment, technology, traditional knowledge systems, space, sustainability, social issues, and more. Each persona is a long-form human-readable description that includes background, interests, values, and likely discussion topics.\n\nPersonas were generated using two complementary synthetic generation approaches: Text-to-Persona, where large language models infer plausible personas from India-centric web and open-source texts, and Persona-to-Persona, where additional personas are derived from existing ones using relationship and role transformations to improve representation of low-visibility groups and relational identities.\n\nThe dataset is released in Apache Parquet (.parquet) format for efficient storage and high-speed large-scale processing. The provided schema is compact and includes three fields: a unique identifier (id), a consolidated persona description (persona), and a domain label (domain). This structure is designed to simplify downstream tasks such as indexing, search, clustering, and embedding-based retrieval.\n\nAll personas are fully synthetic and do not correspond to real individuals. The dataset is designed to reflect India's cultural and regional diversity while minimizing personally identifiable information. Users should be aware that synthetic generation may inherit biases from source texts and models, and responsible use is strongly recommended, particularly for high-stakes applications.",
   "conformsTo": "http://mlcommons.org/croissant/1.0",
-  "url": "https://github.com/anonymous-submitter0104/neurips-submission",
+  "url": "https://github.com/anonymous-submitter0104/acl-arr-submission",
   "distribution": [
     {
       "@type": "cr:FileObject",
       "@id": "github-repository",
       "name": "github-repository",
       "description": "Indic Persona Hub repository on GitHub (anonymous NeurIPS submission).",
-      "contentUrl": "https://github.com/anonymous-submitter0104/neurips-submission",
+      "contentUrl": "https://github.com/anonymous-submitter0104/acl-arr-submission",
       "encodingFormat": "git+https",
       "sha256": "main"
     },
@@ -70,7 +70,7 @@
       "containedIn": {
         "@id": "github-repository"
       },
-      "contentUrl": "https://github.com/anonymous-submitter0104/neurips-submission/blob/main/opensource-release/indic-personahub/personas_20m_lite.parquet",
+      "contentUrl": "https://github.com/anonymous-submitter0104/acl-arr-submission/blob/main/opensource-release/indic-personahub/personas_20m_lite.parquet",
       "encodingFormat": "application/x-parquet",
       "sha256": "main"
     }
