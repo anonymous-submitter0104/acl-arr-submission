@@ -1,24 +1,21 @@
 # OCR Pipeline
 
+This folder accompanies the anonymous ACL ARR submission *MILA (Multilingual Indic Language Archive): A Dataset for Equitable Multilingual LLMs*. It documents the Indic OCR pipeline and its evaluation; see Section 3.3.1 (OCR Pipeline) and Appendices C.4 and C.5 of the paper.
+
 ## 📚 Table of Contents
 
-* [Multi-Stage OCR Processing and Validation Pipeline](#multi-stage-ocr-processing-and-validation-pipeline)
+* [Pipeline Overview](#pipeline-overview)
+* [Multi-Stage OCR Processing](#multi-stage-ocr-processing)
 
-  * [Step 1: Pre-Processing](#step-1-pre-processing)
+  * [Pre-Processing](#pre-processing)
 
-    * [1.1 Error Identification using VLMs](#11-error-identification-using-vlms)
-    * [1.2 Artifact Removal & Enhancement](#12-artifact-removal--enhancement)
-  * [Step 2: OCR Generation with Human-in-the-Loop](#step-2-ocr-generation-with-human-in-the-loop)
-  * [Step 3: Post-OCR Quality Enhancement](#step-3-post-ocr-quality-enhancement)
-  * [Step 4: Validation & Consistency Checking](#step-4-validation--consistency-checking)
-
-    * [4.1 Reconstruction with hOCR + Style Transfer](#41-reconstruction-with-hocr--style-transfer)
-    * [4.2 Embedding Similarity Check](#42-embedding-similarity-check)
-    * [4.3 Reasoning-Based Validation with VLMs](#43-reasoning-based-validation-with-vlms)
-    * [4.4 Trajectory Comparison with LLMs](#44-trajectory-comparison-with-llms)
-    * [4.5 Score-Reason Consistency Check](#45-score-reason-consistency-check)
-  * [Step 5: Human Expert Review and Manual Post-Correction](#step-5-human-expert-review-and-manual-post-correction)
-* [Download Image-Text Pairs Dataset](#download-image-text-pairs-dataset)
+    * [Error Identification using VLMs](#error-identification-using-vlms)
+    * [Artifact Removal & Enhancement](#artifact-removal--enhancement)
+  * [Stage 1: OCR / Parsing](#stage-1-ocr--parsing)
+  * [Stage 2: Post-Correction](#stage-2-post-correction)
+  * [Final LLM-Judge Verification](#final-llm-judge-verification)
+  * [Supplementary: Reconstruction-Based Validation](#supplementary-reconstruction-based-validation)
+* [Release](#release)
 * [Evaluation](#evaluation)
 
   * [Metrics](#metrics)
@@ -29,7 +26,7 @@
     * [Word Error Rate (WER) Evaluation Across Languages](#word-error-rate-wer-evaluation-across-languages)
     * [With Preprocessing and Postprocessing](#with-preprocessing-and-postprocessing)
 * [Key Findings](#key-findings)
-* [Ablation Experiment: Vanilla OCR vs OCR + Post Correction](#ablation-experiment-vanilla-ocr-vs-ocr--post-correction)
+* [Ablation Experiment: Conventional OCR vs Post-Corrected OCR](#ablation-experiment-conventional-ocr-vs-post-corrected-ocr)
 
   * [Observations](#observations)
 * [Model Architecture (310M Parameters)](#model-architecture-310m-parameters)
@@ -37,16 +34,24 @@
 
 ---
 
-# Multi-Stage OCR Processing and Validation Pipeline
+# Pipeline Overview
 
-**Input:** Digitized or undigitized document images (low-quality, noisy, or artifact-rich)
-**Output:** Validated OCR text with associated confidence and quality labels
+High-quality OCR is a prerequisite for native vocabularies and reliable pretraining corpora. Diverse script families, complex ligatures, heterogeneous typography and degraded scans make Indic OCR significantly more challenging than Latin-script OCR. We therefore use a **two-stage, language-specific OCR pipeline** that combines scalable LLM/VLM-based assessment with frontier models selected through our own benchmarking, and post-correction via high-capacity LLMs.
+
+For each language the pipeline consists of **(i) OCR / parsing** and **(ii) post-correction**, preceded by a unified **pre-processing** module. Layout (block structure and reading order) is preserved throughout, as this improves contextual grounding. For every language we evaluate a pool of state-of-the-art OCR and VLM models on public Indic OCR datasets and on the Indic Synthetic OCR Benchmark (ISOB), yielding a shortlist of top-performing candidates.
+
+**Input:** Digitized or undigitized document images (low-quality, noisy or artifact-rich)
+**Output:** Validated OCR text
 
 ---
 
-## Step 1: Pre-Processing
+# Multi-Stage OCR Processing
 
-### 1.1 Error Identification using VLMs
+## Pre-Processing
+
+An upfront orientation and noise pre-processing pass is applied before OCR.
+
+### Error Identification using VLMs
 
 **Model:** Lightweight VLM (e.g., Qwen-VL-7B)
 
@@ -67,7 +72,7 @@ Return the issues as a structured JSON object.
 
 ---
 
-### 1.2 Artifact Removal & Enhancement
+### Artifact Removal & Enhancement
 
 **Techniques:**
 
@@ -92,13 +97,14 @@ Return the enhanced page without altering the content.
 
 ---
 
-## Step 2: OCR Generation with Human-in-the-Loop
+## Stage 1: OCR / Parsing
 
 **Approach:**
 
-* Ensemble of specialist OCR models (per script/language)
-* Generalist VLMs for layout interpretation
-* Periodic human calibration on sampled pages
+* A representative page sample is constructed from crawled books and partner-sourced documents, spanning "easy to hard" difficulty as classified by a strong VLM (e.g., Qwen-VL-32B) using visual cues.
+* Each page is processed by the **top-*k* candidate OCR/VLM models** for the language.
+* Outputs are scored under a **VLM-LLM-as-Judge framework** built on frontier models selected through our Indic benchmarking (see the Indic MMLU folder): a reasoning-capable VLM produces chain-of-thought evaluations on **native-word preservation, spelling accuracy and completeness**, independently verified by a second LLM.
+* Scores are aggregated to select **one consensus model per language**.
 
 **Prompt (Generalist VLM for layout):**
 
@@ -114,12 +120,14 @@ Return in structured JSON to assist OCR alignment.
 
 ---
 
-## Step 3: Post-OCR Quality Enhancement
+## Stage 2: Post-Correction
 
-**Techniques:**
+Even state-of-the-art OCR/VLM systems exhibit minor but systematic errors (spelling inconsistencies, missing graphemes, mis-segmentation, low-frequency artifacts) that accumulate at scale and are costly to correct manually.
 
-* Rule-based filters (dictionary constraints, script normalization)
-* LLM-based post-correction for grammar, consistency, semantic alignment
+* A post-correction LLM is selected via a **language-specific benchmark suite** covering contextual fidelity, native fluency, factual alignment and hallucination resistance.
+* The engine operates at the **page level**, consuming the raw OCR output, other top candidates' outputs, neighboring-page summaries and the VLM's reasoning traces.
+* **Hard pages** invoke full reasoning-based correction; **high-quality pages** get a lightweight pass. The correction prioritizes meaning preservation over exact lexical fidelity.
+* Rule-based filters (dictionary constraints, script normalization) complement the LLM correction.
 
 **Prompt (LLM Post-Correction):**
 
@@ -143,10 +151,19 @@ Now correct this OCR output accordingly:
 
 ---
 
-## Step 4: Validation & Consistency Checking 
-_Such efforts are especially needed, when dealing with extremely low-resource language related corpus_
+## Final LLM-Judge Verification
 
-### 4.1 Reconstruction with hOCR + Style Transfer
+In production, a final verification step evaluates a **stratified sample from all quality tiers** for cultural and contextual sensitivity, tone, factual alignment and hallucination. **Consensus among the judge ensemble** determines batch acceptance.
+
+---
+
+## Supplementary: Reconstruction-Based Validation
+
+_Such efforts are especially needed when dealing with extremely low-resource language corpora._
+
+These scripts provide an additional, optional consistency check by reconstructing a page from its hOCR and comparing it with the original.
+
+### Reconstruction with hOCR + Style Transfer
 
 **Prompt (Qwen Image Edit - Style Transfer):**
 
@@ -161,15 +178,11 @@ Constraints:
 Return the synthetic page.
 ```
 
----
+### Embedding Similarity Check
 
-### 4.2 Embedding Similarity Check
+* Compute cosine similarity between embeddings of original vs reconstructed images.
 
-* Compute cosine similarity between embeddings of original vs reconstructed images
-
----
-
-### 4.3 Reasoning-Based Validation with VLMs
+### Reasoning-Based Validation with VLMs
 
 **Prompt (Reasoning VLM):**
 
@@ -182,9 +195,7 @@ Given this scanned page, describe step by step:
 Return a reasoning trajectory of what you understand from this page.
 ```
 
----
-
-### 4.4 Trajectory Comparison with LLMs
+### Trajectory Comparison with LLMs
 
 **Prompt (Text LLM Comparison):**
 
@@ -201,9 +212,7 @@ Task:
 Return output as JSON: {score, justification, bucket}.
 ```
 
----
-
-### 4.5 Score-Reason Consistency Check
+### Score-Reason Consistency Check
 
 **Prompt (Consistency Check LLM):**
 
@@ -217,35 +226,21 @@ Return either "Consistent" or "Inconsistent".
 
 ---
 
-## Step 5: Human Expert Review and Manual Post-Correction
-
-* Pages flagged as low similarity or inconsistent are routed to human linguists for manual validation.
-
----
-
-**Final Result:**
-An orchestrated OCR pipeline integrating:
-
-* Artifact detection
-* Super-resolution
-* Ensemble OCR
-* Post-correction
-* Reconstruction-based validation
-* Reasoning-VLM alignment
-* Human-in-the-loop oversight
-
 All model interactions are guided by instruction-grade prompts for reproducibility.
 
 ---
 
-## Download Image-Text Pairs Dataset
+## Release
 
-This is a **representative sample set** of the full dataset, which will be released with **complete metadata annotations** and an **open-source license** upon paper acceptance. This dataset will serve as a valuable resource for advancing **OCR** and **Document-VLM understanding, interpretation, and information extraction models**.
+* **Image–text pairs:** a large collection of image–text pairs from Indian-language documents is released in this repository for OCR and Document-VLM research.
 
-- [Download Image-Text Pairs Dataset (Representative Set)](https://github.com/anonymous-submitter0104/neurips-submission/tree/main/opensource-release/image-text-pairs)
+  - [Image-Text Pairs Dataset](https://github.com/anonymous-submitter0104/acl-arr-submission/tree/main/opensource-release/image-text-pairs)
 
-> ⚠️ Please cite this repository if you use the dataset in your research.
+* **OCR-extracted text:** the pipeline is run across all 22 scheduled languages during corpus construction, but public release of the resulting OCR-extracted text is restricted to **10 languages** (Assamese, Bengali, Hindi, Kannada, Malayalam, Marathi, Sanskrit, Tamil, Telugu and Urdu) because of licensing restrictions on the underlying scanned sources.
 
+* **ISOB:** the synthetic OCR benchmark is unaffected by this restriction and is released for all 22 languages (see the ISOB folder).
+
+> Please cite the accompanying paper if you use the dataset in your research.
 
 ---
 
@@ -260,36 +255,32 @@ This is a **representative sample set** of the full dataset, which will be relea
 
 ### LLM-Assisted Quality Evaluation
 
-Traditional metrics are insufficient post-enhancement. Our framework includes:
+Conventional OCR metrics measure surface-level string similarity, but they fail to capture whether post-processing (sentence reordering for coherence, ligature repair that changes character sequences, contextual corrections that substitute semantically equivalent terms) preserves or enhances meaning. This is especially acute for quality-enhanced text, where deliberate modifications may increase string distance from the raw OCR while improving linguistic fidelity.
 
-- LLM-based quality judging (OCR vs. ground truth)
-- Multilingual embedding similarity for semantic fidelity
-- Back-translation to English for cross-lingual alignment
-- BLEU, ROUGE, CHRF++ for translation-level evaluation
-- Image embedding validation for reconstructed pages
+To validate that improvements in traditional metrics translate to better semantic quality, we use LLMs as quality judges: GPT-OSS-120B, DeepSeek and Qwen are prompted to compare the ground truth with both raw OCR and post-processed outputs, producing consistency scores that reflect semantic preservation independent of surface form.
 
 ### Experimental Results
 
 #### Without Preprocessing and Postprocessing
 
+Results on two existing Indian OCR benchmarks, Bhashini and Mozhi:
 
-| Model                                   | bashini CER | bashini WER | bashini PI-WER | bashini Char3gram-F1 | mozhi CER | mozhi WER | mozhi PI-WER | mozhi Char3gram-F1 | iiit CER | iiit WER | iiit PI-WER | iiit Char3gram-F1 |
-|----------------------------------------|------------|------------|----------------|---------------------|-----------|-----------|--------------|------------------|----------|----------|-------------|-----------------|
-| dotsOCR2                                | 0.168      | 0.253      | 0.23           | 0.801               | 0.12      | 0.19      | 0.9          | 0.88              | 0.15     | 0.22     | 0.91        | 0.86             |
-| Surya                                   | 0.2        | 0.28       | 0.138          | 0.867               | 0.14      | 0.21      | 0.91         | 0.89              | 0.17     | 0.25     | 0.92        | 0.87             |
-| Llama-4-Scout-17B-16E-Instruct         | 0.259      | 0.445      | 0.398          | 0.672               | 4.35      | 1.38      | 0.619        | 0.31              | 3.64     | 1.71     | 0.734       | 0.279            |
-| NuMarkdown-8B-Thinking                  | 0.361      | 0.537      | 0.508          | 0.556               | 53.31     | 9.21      | 0.677        | 0.168             | 59.45    | 18.33    | 0.955       | 0.039            |
-| Llama-4-Maverick-17B-128E-Instruct_final | 0.4       | 0.58       | 0.418          | 0.645               | 12        | 4         | 0.72         | 0.22              | 11.33    | 3.49     | 0.778       | 0.238            |
-| Qwen2.5-VL-72B-Instruct                | 0.676      | 0.847      | 0.45           | 0.613               | 18.22     | 4.16      | 0.677        | 0.266             | 0.72     | 0.95     | 0.5         | 0.6              |
-| Qwen2.5-VL-72-Instruct                  | 1.026      | 1.048      | 0.489          | 0.571               | 6.89      | 2.6       | 0.662        | 0.076             | 4.55     | 2.41     | 0.867       | 0.047            |
-| SmolDocling-256M-preview                | 1.235      | 1.4        | 0.988          | 0.016               | 137.66    | 55.57     | 0.946        | 0.0001            | 116.04   | 66.68    | 1           | 0                |
-| RolmOCR                                 | 1.938      | 2.019      | 0.498          | 0.552               | 986.91    | 263.08    | 0.692        | 0.111             | 501.2    | 176.7    | 0.884       | 0.069            |
-| olmOCR-7B-0825                          | 2.068      | 1.842      | 0.516          | 0.531               | 28.53     | 6.48      | 0.704        | 0.126             | 12.19    | 5.61     | 0.89        | 0.072            |
-| Nanonets-OCR-s                          | 3.573      | 2.318      | 0.568          | 0.471               | 305.27    | 42.57     | 0.685        | 0.161             | 102.62   | 31.15    | 0.891       | 0.089            |
-| GLM-4.1V-9B-Thinking                    | 4.384      | 3.88       | 0.893          | 0.08                | 755.1     | 321.92    | 0.985        | 0.0001            | 488.06   | 257.78   | 0.984       | 0.011            |
-| MinerU2.5-2509-1.2B                     | 5.176      | 3.214      | 0.906          | 0.095               | 180       | 55        | 0.91         | 0.1               | 160      | 60       | 0.93        | 0.08             |
-| pixtral-12B                             | 5.847      | 4.86       | 0.893          | 0.163               | 1.47      | 0.999     | 0.941        | 0.0039            | 1.4      | 1        | 1           | 0.0001            |
-| InternVL3_5-GPT-OSS-20B-A4B-Preview-HF | 38.87      | 4.537      | 0.994          | 0.0029              | 195.85    | 240.2     | 0.919        | 0                 | 400      | 500      | 0.95        | 0.05             |
+| Model                                    | Bhashini CER | Bhashini WER | Bhashini PI-WER | Bhashini Char3 F1 | Mozhi CER | Mozhi WER | Mozhi PI-WER | Mozhi Char3 F1 |
+|------------------------------------------|-------------:|-------------:|----------------:|------------------:|----------:|----------:|-------------:|---------------:|
+| DotsOCR                                  | 0.168        | 0.253        | 0.23            | 0.801             | 0.12      | 0.19      | 0.9          | 0.88           |
+| Surya                                    | 0.2          | 0.28         | 0.138           | 0.867             | 0.14      | 0.21      | 0.91         | 0.89           |
+| Llama-4-Scout-17B-16E-Instruct           | 0.259        | 0.445        | 0.398           | 0.672             | 4.35      | 1.38      | 0.619        | 0.31           |
+| NuMarkdown-8B-Thinking                   | 0.361        | 0.537        | 0.508           | 0.556             | 53.31     | 9.21      | 0.677        | 0.168          |
+| Llama-4-Maverick-17B-128E-Instruct       | 0.4          | 0.58         | 0.418           | 0.645             | 12        | 4         | 0.72         | 0.22           |
+| Qwen2.5-VL-72B-Instruct                  | 0.676        | 0.847        | 0.45            | 0.613             | 18.22     | 4.16      | 0.677        | 0.266          |
+| SmolDocling-256M-preview                 | 1.235        | 1.4          | 0.988           | 0.016             | 137.66    | 55.57     | 0.946        | 0.0001         |
+| RolmOCR                                  | 1.938        | 2.019        | 0.498           | 0.552             | 986.91    | 263.08    | 0.692        | 0.111          |
+| olmOCR-7B-0825                           | 2.068        | 1.842        | 0.516           | 0.531             | 28.53     | 6.48      | 0.704        | 0.126          |
+| Nanonets-OCR-s                           | 3.573        | 2.318        | 0.568           | 0.471             | 305.27    | 42.57     | 0.685        | 0.161          |
+| GLM-4.1V-9B-Thinking                     | 4.384        | 3.88         | 0.893           | 0.08              | 755.1     | 321.92    | 0.985        | 0.0001         |
+| MinerU2.5-2509-1.2B                      | 5.176        | 3.214        | 0.906           | 0.095             | 180       | 55        | 0.91         | 0.1            |
+| pixtral-12B                              | 5.847        | 4.86         | 0.893           | 0.163             | 1.47      | 0.999     | 0.941        | 0.0039         |
+| InternVL3_5-GPT-OSS-20B-A4B-Preview-HF   | 38.87        | 4.537        | 0.994           | 0.0029            | 195.85    | 240.2     | 0.919        | 0              |
 
 
 #### Word Error Rate (WER) Evaluation Across Languages
@@ -331,44 +322,42 @@ Traditional metrics are insufficient post-enhancement. Our framework includes:
 
 #### With Preprocessing and Postprocessing
 
+Bhashini, before and after language-specialized post-correction (dictionary-based correction, language-model rescoring, ligature repair and Unicode normalization):
 
-| Model | CER | WER | PI-WER | Char3-gram F1 |
-|-------|-----|-----|--------|---------------|
-| dots.OCR | 0.168 | 0.253 | 0.23 | 0.801 |
-| dots.OCR - postcorrected | 0.085 | 0.145 | 0.12 | 0.91 |
-| Surya | 0.2 | 0.28 | 0.138 | 0.867 |
-| Surya - postcorrected | 0.095 | 0.16 | 0.11 | 0.925 |
+| Model                    | CER   | WER   | PI-WER | Char3 F1 |
+|--------------------------|------:|------:|-------:|---------:|
+| Dots.OCR                 | 0.168 | 0.253 | 0.23   | 0.801    |
+| Dots.OCR - postcorrected | 0.085 | 0.145 | 0.12   | 0.91     |
+| Surya                    | 0.2   | 0.28  | 0.138  | 0.867    |
+| Surya - postcorrected    | 0.095 | 0.16  | 0.11   | 0.925    |
 
 
 ### Key Findings
 
-- VLMs cover Indic scripts but hallucinate extra text, inflating CER and WER beyond 1.
-- Specialist OCR models outperform after preprocessing + postcorrection
-- Postcorrection improves CER by ~50% and WER by ~40% on average
-- Pretraining on processed OCR text yields smoother convergence vs. raw OCR
+- Vision-language models cover Indic scripts but hallucinate extra text, inflating CER and WER (often beyond 1) on these benchmarks.
+- Specialized OCR models such as DotsOCR and Surya achieve the lowest error rates, and improve further after post-correction.
+- Post-correction roughly halves CER (Dots.OCR 0.168 to 0.085; Surya 0.2 to 0.095) and cuts WER by about 40–45% (0.253 to 0.145; 0.28 to 0.16).
+- Pretraining on processed OCR text yields smoother convergence than raw OCR.
 
-## Ablation Experiment: Vanilla OCR vs OCR + Post Correction
+## Ablation Experiment: Conventional OCR vs Post-Corrected OCR
 
-We demonstrate the practical impact of OCR quality on downstream model training through controlled experiments on a **310M parameter dense language model**. Two versions of the same corpus were compared:
+We demonstrate the practical impact of OCR quality on downstream model training through controlled experiments on a **310M-parameter dense language model**. Two versions of the same corpus were compared:
 
-1. **Raw OCR output** with typical error rates around **15–20%**.  
-2. **Postprocessed OCR text** using our full correction pipeline.
+1. **Raw OCR output** with typical error rates around **15–20%**.
+2. **Quality-enhanced text** after our full post-processing pipeline.
 
 ### Observations
 
-- **Raw OCR Data**:  
-  - Produced unstable loss curves with frequent spikes.  
-  - Showed irregular perplexity behavior and slow convergence.  
-  - Models struggled to learn coherent linguistic patterns.  
-  - High validation perplexity and poor downstream performance.
+- **Raw OCR Data**:
+  - Produced unstable loss curves with frequent spikes.
+  - Showed irregular perplexity behavior and slow convergence, indicating corpus noise overwhelming the learning signal.
 
-- **Postprocessed OCR Data**:  
-  - Achieved smooth, monotonic loss reduction.  
-  - Stable perplexity curves, indicative of high-quality pretraining.  
-  - Substantially lower final perplexity.  
-  - Stronger performance on Indic language benchmarks.  
+- **Post-processed OCR Data**:
+  - Achieved smooth, monotonic loss reduction.
+  - Stable perplexity curves, with markedly lower final perplexity.
+  - Superior performance on Indic benchmarks.
 
-These results show that **OCR preprocessing directly improves model capabilities**. For low-resource languages, where data scarcity is already a challenge, noisy OCR signals compound the disadvantage. Conversely, robust OCR pipelines and postprocessing amplify the value of scarce digitized resources, enabling smaller corpora to support stronger models.
+These results show that careful preprocessing and post-correction directly improve model capability. In low-resource settings, noisy OCR exacerbates data scarcity, whereas robust OCR and post-processing transform limited corpora into high-impact training material.
 
 ---
 
@@ -394,12 +383,10 @@ These results show that **OCR preprocessing directly improves model capabilities
 
 ### Validation Loss Comparison
 
-![ocr-pipeline/assets/val-loss-ocr.png](https://github.com/anonymous-submitter0104/neurips-submission/blob/4c0a6bc594ecffba99fb2f1678dfad379360c6bd/ocr-pipeline/assets/val-loss-ocr.png)
+![Validation loss: conventional vs post-corrected OCR](assets/val-loss-ocr.png)
 
-
-The postcorrected corpus produces **substantially more stable training dynamics** and **lower final perplexity**, demonstrating the direct impact of OCR quality on model performance.
+The post-corrected corpus produces **substantially more stable training dynamics** and **lower final perplexity**, demonstrating the direct impact of OCR quality on model performance.
 
 ---
 
-The infrastructure and validation framework established here extends beyond MILA itself, providing **reusable tools** that support equitable language technology development across the world’s linguistic diversity.
-
+Beyond MILA, the infrastructure and validation framework established here provide reusable tools for equitable multilingual model development.
