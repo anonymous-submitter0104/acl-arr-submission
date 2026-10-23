@@ -1,6 +1,6 @@
 # Data Curation
 
-This section describes our **curation pipeline** and the **ablation experiment** conducted to measure its effectiveness.
+This folder accompanies the anonymous ACL ARR submission *MILA (Multilingual Indic Language Archive): A Dataset for Equitable Multilingual LLMs*. It describes our **curation pipeline** and the **ablation experiments** conducted to measure its effectiveness. For the full methodology see Section 3.2 (Data Curation) and Appendix B of the paper; the ablations are in Appendix C.1 and C.3.
 
 ---
 
@@ -11,11 +11,6 @@ This section describes our **curation pipeline** and the **ablation experiment**
 3. [Curation Pipeline Overview](#curation-pipeline-overview)
    - [Pipeline Diagram](#pipeline-diagram)
    - [Description of Stages](#description-of-stages)
-     - [Raw Corpus Construction](#raw-corpus-construction)
-     - [Deduplication and Cleaning](#deduplication-and-cleaning)
-     - [Quality Filtering](#quality-filtering)
-     - [Indian Language Adaptation](#indian-language-adaptation)
-     - [Final Curated Dataset](#final-curated-dataset)
 4. [Evaluation Procedure](#evaluation-procedure)
    - [Benchmarks Used](#benchmarks-used)
    - [Evaluation Strategy](#evaluation-strategy)
@@ -23,30 +18,19 @@ This section describes our **curation pipeline** and the **ablation experiment**
 5. [Ablation Experiment 1: Efficacy of the Curation Pipeline](#ablation-experiment-1-evaluating-the-efficacy-of-the-curation-pipeline)
    - [Model Details](#model-details)
    - [Training Data Composition](#training-data-composition)
-     - [Conventional Corpus (Uncurated)](#conventional-corpus-uncurated)
-     - [Curated Corpus (Curation Applied)](#curated-corpus-curation-applied)
    - [Key Design Considerations](#key-design-considerations)
    - [Experiment Replication Procedure](#experiment-replication-procedure)
-     - [Curation Scripts and Codebase](#curation-scripts-and-codebase)
-     - [Steps to Run](#steps-to-run)
    - [Results Obtained: Conventional vs Curated](#results-obtained-conventional-vs-curated)
-     - [Benchmark Scores](#benchmark-scores)
-     - [Observations](#observations)
    - [Conclusion](#conclusion)
 6. [Ablation Experiment 2: Toxicity Evaluation](#ablation-experiment-2-toxicity-evaluation)
-   - [Objective](#objective)
-   - [Key Findings](#key-findings)
-   - [Broader Implications](#broader-implications)
-   - [Conclusion](#conclusion-1)
 7. [Conventional vs Curated Data Sample](#conventional-vs-curated-data-sample)
-   - [Observation](#observation)
 
 ---
 
 ## Folder Structure
 
 ```
-neurips-submission/
+acl-arr-submission/
  ├── data_curation/
  │    ├── curation/
  │    │    ├── cc_curator.py
@@ -72,115 +56,104 @@ neurips-submission/
 
 ### Description of Stages
 
-1. **Raw Corpus Construction**
+The pipeline is multi-stage and Indic-specific, inspired by general-purpose curation frameworks (NeMo Curator) and augmented with custom language-aware modules. It is applied uniformly to all four MILA sources (OCR, crawl, translation and synthetic data), across the 22 scheduled Indic languages and English.
 
-   * Aggregate large-scale text from publicly available sources (English + Hindi).
-2. **Deduplication and Cleaning**
+1. **Modifiers and Heuristic Filters**
 
-   * NeMo Curator deduplication (DCLM)
-   * Filter by word/character distribution statistics (FWE filtering)
-3. **Quality Filtering**
+   * Modifiers normalize text: boilerplate string removal, HTML tag removal, Unicode reformatting, quotation unification and excess whitespace removal.
+   * Heuristic filters remove degenerate content: word count, repeating top-*n*-grams (*n* = 2, 3), URLs, symbols-to-words ratio and numbers filters.
+2. **Two-level Deduplication**
 
-   * Document-level filtering: removal of boilerplate, low-information pages, and noise
-   * Language ID filtering (restricting to English + Hindi)
-4. **Indian Language Adaptation**
+   * Exact duplicates are removed via URL and MD5 signatures.
+   * Near-duplicates (templated pages, OCR variants, lightly modified copies) are removed via GPU-accelerated fuzzy deduplication.
+3. **Multilingual Language Identification**
 
-   * Language-specific tokenization and normalization for Hindi
-   * Script unification for consistent Unicode handling
-5. **Final Curated Dataset**
+   * The pretrained fastText language-identification model is used off-the-shelf, combined with regex-driven rules that enforce script–language consistency.
+   * This mitigates cross-script contamination, Romanized drift and mixed-language artifacts common in web sources.
+4. **Toxicity Filtering**
 
-   * High-quality, domain-diverse corpus passed to training
+   * Two stages: rule-based scanning, followed by a fine-tuned IndicBERTv2-MLM-only classifier that recovers false positives and refines borderline cases.
+5. **PII Identification and Redaction**
 
+   * A multilingual PII module identifies and redacts personally identifiable information in Indian languages.
+6. **Quality Filtering**
+
+   * Language-specific IndicBERTv2-MLM-only classifiers label documents on a five-level ordinal quality scale (High, High–Medium, Medium, Medium–Low, Low), judged on linguistic well-formedness and semantic coherence.
+7. **Benchmark Decontamination**
+
+   * $n$-gram overlap filtering (8–13 grams) combined with Infinigram-based cross-domain detection, applied across all four sources.
+8. **Final Curated Dataset**
+
+   * High-quality, domain-diverse corpus passed to training.
 
 ## Evaluation Procedure
 
-To rigorously assess the impact of our **curation pipeline**, we conducted a controlled evaluation comparing models trained on **conventional datasets** versus **curated datasets**.
+To assess the impact of the **curation pipeline**, we compare models trained on **conventional data** versus **curated data** under otherwise identical conditions.
 
 **Purpose:**
-The evaluation aims to quantify the benefit of data curation on model performance across multiple reasoning and knowledge benchmarks, isolating the effect of data quality from scale.
+The evaluation quantifies the benefit of data curation on reasoning and knowledge benchmarks, isolating the effect of data quality from scale.
 
 ### Benchmarks Used:
-We selected widely recognized benchmarks to capture diverse aspects of LLM capabilities:
 
-* **[ARC Challenge & ARC Easy](https://huggingface.co/datasets/allenai/ai2_arc)** – reasoning-focused multiple-choice questions. 
+* **[ARC Challenge & ARC Easy](https://huggingface.co/datasets/allenai/ai2_arc)** – reasoning-focused multiple-choice questions.
 * **[HellaSwag (English & Hindi)](https://huggingface.co/datasets/Rowan/hellaswag)** – commonsense reasoning and next-event prediction.
 * **[MMLU (English & Hindi)](https://huggingface.co/datasets/cais/mmlu)** – multitask knowledge evaluation across academic and professional subjects.
 
 ### Evaluation Strategy:
 
-* For this experiment, we selected the [Param-1](https://huggingface.co/bharatgenai/Param-1) pre-trained checkpoint, trained on 5T tokens, as our baseline due to its bilingual capabilities, making it well-suited for our evaluation. We then performed extended continual pretraining on this model using 2T tokens, drawn from the DCLM corpus, with 30% of the data translated into Hindi, under both conventional and curated data conditions.
-* Both datasets were **matched in size (2T tokens)** to ensure that performance differences reflect the effect of curation rather than data volume.
-* Performance was evaluated using standard benchmark metrics to measure gains in reasoning, multilingual understanding, and robustness.
+* We train two instances of a 3B-parameter dense causal language model **from scratch** on **2 trillion tokens of English and Hindi data**: one on raw web-scraped text processed only with basic cleaning (conventional), and one on data processed with the full curation pipeline (curated).
+* Architecture, hyperparameters, training duration, batch size, learning-rate schedule and infrastructure are **identical** across the two runs, so performance differences are attributable to data quality alone.
+* Both datasets are **matched in size (2T tokens)**, so differences reflect curation rather than data volume.
 
 ### Key Expectations:
-We anticipate that models trained on curated datasets will demonstrate:
+We expect the model trained on curated data to show:
 
-1. Higher accuracy across all benchmarks.
-2. Improved performance on **low-resource and multilingual settings** (e.g., Hindi variants).
-3. Reduced propagation of low-quality, toxic, or redundant content, contributing to safer and more reliable outputs.
-
-This evaluation framework establishes a **clear, reproducible methodology** for testing the efficacy of data curation, providing actionable insights for both ongoing model development and future dataset construction.
-
+1. Higher accuracy across the benchmarks.
+2. Larger gains in lower-resource settings (e.g., Hindi variants).
+3. Reduced propagation of low-quality, toxic or redundant content.
 
 ## Ablation Experiment 1: Evaluating the Efficacy of the Curation Pipeline
 
-For this ablation study, we selected a **pre-trained checkpoint of an open-source LLM, [Param-1](https://huggingface.co/bharatgenai/Param-1)**, a **2.9B-parameter bilingual model** supporting English and Hindi. This checkpoint was trained on **5T tokens**, providing a strong multilingual baseline for our evaluation.
-
-> *Based on our internal experimentation, we empirically observe scaling effects consistent across small, medium, and large model regimes*
-> [Scaling Laws for Neural Language Models](https://ar5iv.labs.arxiv.org/html/2001.08361),
-> [Unraveling the Mystery of Scaling Laws: Part I](https://arxiv.org/abs/2403.06563),
-> [Scaling Law for Language Models Training Considering Batch Size](https://arxiv.org/html/2412.01505),
-> [Language models scale reliably with over-training and on downstream tasks](https://www.emergentmind.com/papers/2403.08540)
-
 ### Model Details:
 
-* **Model:** Param-1 Pre-trained Checkpoint (2.9B parameters)
-* **Checkpoint Source:** [Hugging Face: Param-1](https://huggingface.co/bharatgenai/Param-1)
-* **Training Recipe:** As described in the [Param Paper](https://arxiv.org/pdf/2507.13390)
-* **Pretraining Tokens:** Original pretraining: 5T tokens; extended continual pretraining for ablation: 2T tokens
+* **Model:** 3B-parameter dense causal language model (grouped-query attention, 32 hidden layers, hidden size 2048, intermediate size 7168, SiLU activations, RoPE).
+* **Training:** from scratch (no pretrained checkpoint) on 2T tokens of English and Hindi, under two conditions (conventional vs curated).
+* **Architecture details:** see Appendix C.1 (Experiment: 3B Dense Model) of the paper. The curated instance is the 3B model reported in the main-paper results.
 
 ### Training Data Composition
 
-To systematically evaluate the effect of data curation, we conducted **extended continual pretraining** on 2T tokens under **two controlled conditions**:
-
 1. **Conventional Corpus (Uncurated)**
 
-   * Constructed directly from raw text with minimal preprocessing (tokenization, basic normalization).
+   * Raw web-scraped text with only basic cleaning.
    * The 2T-token subset was sampled from the [DCLM corpus](https://github.com/mlfoundations/dclm), with **30% of tokens translated into Hindi** to maintain bilingual coverage.
-   * No additional quality filters were applied, ensuring a baseline reflecting typical large-scale pretraining data.
+   * No additional quality filters, reflecting typical large-scale pretraining data.
 
 2. **Curated Corpus (Curation Applied)**
 
    * Derived from the same underlying sources as the conventional corpus.
-   * Processed through the **NeMo Curator pipeline**, which applies multiple quality control steps:
-
-     * Deduplication
-     * Heuristic-based filtering
-     * PII redaction
-     * Toxicity filtering
-     * Quality scoring (low, medium, high)
-   * A fully curated **2T-token subset** was selected, strictly matching the conventional corpus in size to isolate the effect of curation.
+   * Processed through the curation pipeline described above (deduplication, heuristic filtering, language identification, toxicity filtering, PII redaction, quality filtering).
+   * A **2T-token subset** matching the conventional corpus in size.
 
 ### Key Design Considerations:
 
 * Both datasets contain **exactly 2T tokens**, eliminating confounding effects of scale.
-* By maintaining identical token counts, any observed performance differences can be confidently attributed to **data quality and curation**.
-* Inclusion of **30% Hindi tokens** ensures that the evaluation captures bilingual performance, addressing potential reviewer concerns regarding language coverage.
+* All training settings are identical, so observed differences can be attributed to **data quality and curation**.
+* The **30% Hindi tokens** ensure the evaluation captures bilingual performance.
 
 ### Experiment Replication Procedure
 
-The complete set of scripts and codebase required to replicate this experiment will be provided below.
+The scripts and codebase needed to replicate this experiment are provided in this repository.
 
 **Curation Scripts and Codebase**
 
-All scripts are provided under [`neurips-submission/Data_Curation/`](experiments/data_curation/).
+All scripts are provided under [`data_curation/`](data_curation/).
 
 **Key Components**
 
-* `curation/curator.py` → Curation Pipeline (Cleaning, Heuristic Filters, Redact PII etc.)
-* `deduplication/deduplciation.sh` → Bash file for global deduplication
-* `quality_filter/quality_filter.py` → Quality Filter (Low, Medium, High)
-* `toxic_filter/toxic_filter_rule.py` → Rule Based Toxic Filtering (word list included for 1 language)
+* `curation/` → Curation pipeline (cleaning, heuristic filters, PII redaction, language identification)
+* `deduplication/deduplication.sh` → Bash file for global deduplication
+* `quality_filter/quality_filter.py` → Quality filter
+* `toxic_filter/toxic_filter_rule.py` → Rule-based toxic filtering (word list included for 1 language)
 
 **Steps to Run**
 
@@ -220,67 +193,50 @@ All scripts are provided under [`neurips-submission/Data_Curation/`](experiments
 
 ### Results Obtained: Conventional vs Curated
 
-We evaluated models trained on both conventional datasets (raw corpus with minimal preprocessing) and curated datasets (data refined with targeted filtering and quality improvements). The goal was to compare their performance across widely used benchmarks for LLM evaluation.
+We evaluated models trained on the conventional and curated datasets across six benchmarks (Appendix C.1, Table "Benchmark results: conventional vs. curated 3B training data").
 
-**Benchmark Scores**
-
-| **Model**      | **ARC Challenge** | **ARC Easy** | **Hella Swag** | **Hella Swag Hi** | **MMLU** | **MMLU Hi** |
-|----------------|------------------:|--------------:|----------------:|------------------:|---------:|------------:|
-| Conventional   | 46.5              | 73.6          | 73.5            | 28.9              | 41.3     | 26.2        |
-| Curated        | 53.6              | 74.2          | 73.8            | 41.4              | 46.2     | 34.6        |
+| **Model**      | **ARC Challenge** | **ARC Easy** | **HellaSwag** | **HellaSwag-Hi** | **MMLU** | **MMLU-Hi** |
+|----------------|------------------:|--------------:|---------------:|------------------:|---------:|------------:|
+| Conventional   | 43.5              | 73.6          | 72.9           | 38.9              | 41.3     | 26.2        |
+| Curated        | **46.7**          | **77.31**     | **73.40**      | **44.1**          | **46.2** | **30.7**    |
 
 ### Observations
 
-1. **Consistent Improvement Across Benchmarks:**
-   Models trained on the curated corpus outperform those trained on the conventional corpus across all evaluated benchmarks, demonstrating the positive impact of data curation.
+1. **Consistent improvement on all six benchmarks.** The curated model outperforms the conventional model everywhere.
 
-2. **Significant Gains in Low-Resource / Multilingual Settings:**
-   The largest relative improvements are observed in **HellaSwag Hi** (Hindi) and **MMLU Hi**, with scores increasing from 28.9 → 41.4 and 26.2 → 34.6, respectively. This highlights that curation is particularly beneficial for low-resource and non-English data.
+2. **Hindi benefits strongly.** HellaSwag-Hi rises from 38.9 to 44.1 (+5.2) and MMLU-Hi from 26.2 to 30.7 (+4.5). Noisy training data disproportionately degrades performance in the lower-resource language, where script variation, code-mixing and sparse high-quality resources make conventional cleaning insufficient.
 
-3. **Marginal Gains in High-Resource English Benchmarks:**
-   Improvements in ARC Challenge, ARC Easy, and HellaSwag (English) are smaller but consistent, indicating that curation enhances overall model quality, even for already high-quality data.
-
-4. **Effect of Quality Filtering:**
-   The gains suggest that removing low-quality, redundant, and toxic content through the curation pipeline allows the model to better utilize training tokens, improving generalization and robustness.
+3. **English also improves.** ARC Challenge rises from 43.5 to 46.7, ARC Easy from 73.6 to 77.31 (+3.71), and MMLU from 41.3 to 46.2 (+4.9). HellaSwag improves slightly (72.9 to 73.40).
 
 ### Conclusion
 
-The ablation experiment demonstrates that **data curation has a measurable, positive effect on LLM performance**:
-
-* **Curated datasets consistently outperform conventional datasets**, confirming that quality matters as much as quantity in large-scale pretraining.
-* **Bilingual and low-resource performance benefits the most**, underlining the importance of careful curation for multilingual corpora.
-* These results validate the **NeMo curation pipeline** as an effective tool for improving downstream LLM performance, providing strong justification for its adoption in future model training.
+* The curated model outperforms the conventional model on all six benchmarks under identical architecture, training configuration and token budget.
+* The gains are visible in both English and Hindi, and are pronounced for Hindi, which supports the importance of Indic-specific curation for multilingual corpora.
 
 ## Ablation Experiment 2: Toxicity Evaluation
 
-### Objective 
-To evaluate the effect of data curation on model safety, we tested the **Param-1 model** after **extended continual pretraining on 2T curated tokens**. The pretraining used the curated dataset derived from the DCLM corpus (with 30% Hindi translations) to ensure bilingual coverage. This checkpoint reflects the combined effect of high-quality curated data and instruction tuning.
+### Objective
+To evaluate the effect of data curation on model safety, we measure toxicity of the curated 3B model from Experiment 1.
 
-We assessed toxicity using the **Toxigen** benchmark within the **LLM360 Safety360** suite. This framework measures both **explicit and implicit toxic outputs** through adversarial prompts across identity-based and general categories. The objective of this experiment is to quantify the **effectiveness of toxicity mitigation** in Param-1 relative to other models of similar scale.
+We use the **Toxigen** benchmark via the **LLM360 Safety360** suite, which provides explicit and subtle adversarial prompts spanning identity-based categories (race, religion, gender, nationality) and general offensive content. Model completions from Toxigen templates are classified by a RoBERTa-based detector fine-tuned for nuanced, context-dependent toxic language. We compare the curated 3B model against three multilingual baselines: Sarvam-2B, Llama-3.2-3B and Gemma-2-2B, which were trained on substantial corpora but without our curation pipeline.
 
 ![Toxicity Sample](/readme-resources/toxic-comparison)
 
 ### Key Findings
 
-* **Lower or Comparable Toxicity:** Param-1 consistently exhibits **lower or comparable toxicity rates** relative to other multilingual baselines.
-* **Qualitative Behavior:** The model avoids generating stereotype-amplifying content, producing **neutral, helpful, and culturally respectful responses**, particularly in sensitive scenarios.
-* **Impact of Curation Pipeline:** These results validate the effectiveness of our **curation and instruction-tuning pipeline**, which explicitly targets safe, high-quality content in both English and Hindi.
+* **Lower toxicity than baselines:** across 16 neutral and adversarial evaluation sets, the curated 3B model stays below all three baselines in nearly every condition.
+* **Adversarial identity-based prompts:** the most challenging category; the curated model's toxic-output rate is 15–30% lower than the baselines'.
+* **No loss of utility:** the same checkpoint remains competitive on the task benchmarks above.
+* **Link to the toxicity filter:** the results indicate that the two-stage toxicity filter removes training examples that would otherwise teach models to reproduce harmful patterns, without introducing false positives severe enough to degrade linguistic coverage.
 
-### Broader Implications
-
-Our evaluation shows that Param-1 maintains **strong and consistent performance** across linguistic, reasoning, and culturally grounded tasks. By testing on both standard English benchmarks and **culturally adapted Hindi and multilingual datasets**, we provide a **robust assessment of the model’s generalization and domain-specific capabilities**.
-
-### Conclusion
-
-These results demonstrate that **extended continual pretraining on curated data improves both safety and performance**, establishing Param-1 as a **competitive, culturally aware foundation model** suitable for diverse real-world applications.
+See Appendix C.3 (Ablation Study: Safety and Toxicity Reduction) and Appendix B.3 (Toxicity Classifier) of the paper.
 
 ---
 ## Conventional vs Curated Data Sample
 
-The Following is an example of a Assamese Text Pre-Curation and Post-Curation:
+The following is an example of Assamese text before and after curation:
 ![Curation Sample](/readme-resources/curation.png)
 
 ### Observation
 
-After the curation process, the dataset was significantly cleaned and standardized to improve model training. All HTML and markup tags such as `<div>`, `<br>`, `<i>`, `<b>`, and `<span>` were removed, leaving only readable text, while extraneous punctuation and repeated special symbols like `**`, `%%`, and `!!` were eliminated to produce more natural sentences. Redundant or repeated phrases were merged or removed to reduce overfitting, and line breaks or formatting artifacts were smoothed to ensure coherent, continuous sentences. Non-linguistic metadata, including authorship markers, instructional notes, or bracketed annotations, was stripped to focus solely on meaningful content. Token normalization was applied to unify encoding, spacing, punctuation, and Unicode scripts, minimizing inconsistencies across multilingual text. Additionally, potential toxic or inappropriate content was filtered to ensure safer and culturally neutral data. Overall, these curation steps enhanced the quality, readability, and consistency of the corpus, making it more suitable for downstream model training.
-
+After curation, the text is cleaned and standardized to improve model training. HTML and markup tags such as `<div>`, `<br>`, `<i>`, `<b>` and `<span>` are removed, leaving only readable text, and extraneous punctuation and repeated special symbols like `**`, `%%` and `!!` are eliminated to produce more natural sentences. Redundant or repeated phrases are merged or removed, and line breaks and formatting artifacts are smoothed so sentences are coherent and continuous. Non-linguistic metadata, such as authorship markers, instructional notes and bracketed annotations, is stripped. Token normalization unifies encoding, spacing, punctuation and Unicode scripts, minimizing inconsistencies across multilingual text, and potentially toxic content is filtered.
