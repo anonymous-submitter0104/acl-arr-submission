@@ -51,14 +51,14 @@
   "name": "indic-personahub-domain-qa-english",
   "description": "The Indic PersonaHub Domain QA Corpus (English Only) is a synthetic instruction dataset designed for training and evaluating language models on India-centric domain reasoning and long-form generation. Each sample is generated using a domain-tagged synthetic persona from Indic PersonaHub, representing diverse Indian backgrounds and expertise areas. For every persona, a domain-specific thought-provoking question is generated, and the same persona produces a detailed 800–900 word answer grounded in its expertise and Indian context. The dataset focuses on structured, high-entropy English responses suitable for instruction tuning, reasoning tasks, and culturally grounded model development.",
   "conformsTo": "http://mlcommons.org/croissant/1.0",
-  "url": "https://github.com/anonymous-submitter0104/neurips-submission",
+  "url": "https://github.com/anonymous-submitter0104/acl-arr-submission",
   "distribution": [
     {
       "@type": "cr:FileObject",
       "@id": "github-repository",
       "name": "github-repository",
       "description": "Anonymous NeurIPS submission repository on GitHub containing the Indic PersonaHub training corpus.",
-      "contentUrl": "https://github.com/anonymous-submitter0104/neurips-submission",
+      "contentUrl": "https://github.com/anonymous-submitter0104/acl-arr-submission",
       "encodingFormat": "git+https",
       "sha256": "main"
     },
@@ -70,7 +70,7 @@
       "containedIn": {
         "@id": "github-repository"
       },
-      "contentUrl": "https://github.com/anonymous-submitter0104/neurips-submission/blob/main/opensource-release/training-corpus/indian-english/English_chunk_0_lite.parquet",
+      "contentUrl": "https://github.com/anonymous-submitter0104/acl-arr-submission/blob/main/opensource-release/training-corpus/indian-english/English_chunk_0_lite.parquet",
       "encodingFormat": "application/x-parquet",
       "sha256": "main"
     }
