@@ -1,108 +1,117 @@
 # Translation Benchmarking & Pipeline for Indic Languages
 
-> Ensemble-based translation and post-correction pipeline for 16 Indic languages — leveraging specialist MT models, high-performing Indic LLMs, and human validation.
+> Hybrid MT→LLM translation pipeline for the 22 scheduled Indic languages: specialist MT models for lexical grounding, Indic-capable LLMs for post-correction and long-context consistency, and LLM-judge verification.
+
+This folder accompanies the anonymous ACL ARR submission *MILA (Multilingual Indic Language Archive): A Dataset for Equitable Multilingual LLMs*; see Section 3.3.2 (Translation Pipeline) and Appendix C.6 of the paper.
 
 ---
 # Table of Contents
 
 1. [Overview](#overview)
 2. [Goals](#goals)
-3. [Datasets](#datasets)
-4. [Translation Pipeline](#translation-pipeline)
+3. [Translation Pipeline](#translation-pipeline)
 
-   * [Step 1 — Source Data Selection](#step-1---source-data-selection)
-   * [Step 2 — Specialist Model Translation & Generalist Refinement](#step-2---specialist-model-translation--generalist-refinement)
-   * [Step 3 — LLM-as-Judge Semantic Consensus](#step-3---llm-as-judge-semantic-consensus)
-   * [Step 4 — Human Evaluation & Finalization](#step-4---human-evaluation--finalization)
-   * [Step 5 — Long-Context Translation](#step-5---long-context-translation)
-5. [Evaluation Metrics](#evaluation-metrics)
-6. [Model Inventory](#model-inventory)
-7. [Reproducible Commands](#reproducible-commands)
-
-   * [IndicTrans2 Evaluation](#indictrans2-evaluation)
-   * [NLLB Batch Translation](#nllb-batch-translation)
-   * [Generalist LLM Refinement](#generalist-llm-refinement)
-   * [LLM-as-Judge Evaluation](#llm-as-judge-evaluation)
-8. [Results](#results)
-
-   * [Baseline MT Results](#baseline-mt)
-   * [Post Enhancements on MT](#post-enhancements-on-mt)
-9. [Key Insights & Best Practices](#key-insights--best-practices)
+   * [Step 1 — Specialist MT Generation](#step-1--specialist-mt-generation)
+   * [Step 2 — LLM-Based Post-Correction](#step-2--llm-based-post-correction)
+   * [Step 3 — Long-Context and Overlap Handling](#step-3--long-context-and-overlap-handling)
+   * [Step 4 — Quality Classification and Selective Routing](#step-4--quality-classification-and-selective-routing)
+   * [Step 5 — Production Deployment and LLM-Judge Verification](#step-5--production-deployment-and-llm-judge-verification)
+4. [Evaluation Metrics](#evaluation-metrics)
+5. [Model Inventory](#model-inventory)
+6. [Reproducible Commands](#reproducible-commands)
+7. [Results](#results)
+8. [Key Insights](#key-insights)
 
 ---
 
-## Abstract
+## Overview
 
-This repository benchmarks open-source machine translation (MT) models and LLMs on Indic languages and documents a multi-stage pipeline that combines specialist translation systems with generalist LLMs for post-correction. The pipeline integrates automated ranking using LLMs as judges, back-translation validation, and human evaluation to produce coherent, domain-sensitive translations across STEM, mathematics, code, and general content for 16 Indic languages.
+Translation-based data generation addresses the structural scarcity of high-quality parallel corpora for Indic languages, producing parallel data that facilitates knowledge transfer from English into the 22 Indic languages that form the backbone of MILA.
+
+Benchmarking open-source MT systems and multilingual LLMs on Indic translation tests shows two consistent patterns:
+
+* **Specialist MT models** achieve low error rates and strong lexical fidelity, but sound rigid.
+* **Generalist LLMs** produce more natural translations, at the cost of weaker vocabulary grounding and occasional semantic drift.
+
+No single model is best across languages. This motivates a **hybrid approach**: MT provides lexical grounding, and LLMs supply fluency and long-context consistency. Controlled overlap-based analysis confirms that LLM rewriting of MT output, using small contextual windows from preceding chunks, improves fluency without degrading meaning.
 
 ---
 
 ## Goals
 
-1. Benchmark open-source specialist MT models and generalist LLMs across multiple parameter sizes.
+1. Benchmark open-source specialist MT models and generalist LLMs.
 2. Leverage high-scoring Indic-MMLU LLMs for translation refinement and post-correction.
-3. Evaluate translation quality using **chrF**, **chrF++**, and **sacreBLEU** metrics.
-4. Define a reproducible ensemble + post-correction strategy for high-fidelity Indic translations.
-
----
-
-## Datasets
-
-We evaluate on two widely used benchmarks:
-
-* [google/IndicGenBench_flores_in](https://huggingface.co/datasets/google/IndicGenBench_flores_in)
-* [ai4bharat/IN22-Gen](https://huggingface.co/datasets/ai4bharat/IN22-Gen)
-
-The datasets cover translations into 16 Indic languages: As, Be, Gu, Ka, Hi, Mai, Ml, Mr, Ne, Or, Pa, Sa, Sd, Ta, Te, Ur.
+3. Evaluate translation quality with **chrF++**.
+4. Define a reproducible specialist-MT + LLM post-correction strategy for high-fidelity Indic translations.
 
 ---
 
 ## Translation Pipeline
 
-### Step 1 — Source Data Selection
+### Step 1 — Specialist MT Generation
 
-* Select parallel data from resource-rich language pairs (primarily English → Indic).
-* Cover diverse domains: general text, STEM, mathematics, code, and formal documentation.
-* Ensure representation across different text lengths and complexity levels.
+* Each document is first translated with high-coverage specialist MT systems (e.g., **IndicTrans2**, **NLLB** variants).
+* These models preserve terminology and reduce hallucination risk, and form the grounding backbone of the pipeline.
 
 ---
 
-### Step 2 — Specialist Model Translation & Generalist Refinement
+### Step 2 — LLM-Based Post-Correction
 
-* Initial translations generated using **two or more specialist models**:
+* Generalist LLMs refine the MT output to improve readability, vocabulary richness, cultural appropriateness and stylistic naturalness.
+* The MT output serves as a **semantic anchor**, preventing LLM-induced deviations or hallucinations.
+* **Model selection:** the post-correction LLM is chosen per language from **Indic-MMLU** results, routing each language to its best-performing candidate. For example, Llama-4-Maverick-17B is selected for Hindi and Tamil, and Qwen3-235B-A22B-Instruct-2507 for Assamese and Dogri. Languages with lower scores or complex morphology receive an additional reasoning-based refinement step.
 
-  * **IndicTrans2:** Domain-optimized for Indic languages.
-  * **NLLB variants:** Multilingual neural models (200M–54B parameters).
-* Specialist outputs are refined by high-performing generalist LLMs, correcting inconsistencies and improving fluency.
-
-**Generalist Refinement Prompt:**
+**Post-Correction Prompt Template:**
 
 ```text
-Role: Expert translator for {target_language}.
-Input: Two translation candidates from specialist systems.
-Candidate 1: {translation_1}
-Candidate 2: {translation_2}
-Task: Produce a refined translation that:
-- Combines the strengths of both candidates
-- Ensures grammatical correctness and natural flow
-- Preserves technical terminology
-- Maintains semantic fidelity
-Output: Final refined translation only.
+Role and Context: You are an expert linguist specializing in the {language} language with deep
+understanding of grammar, syntax, and natural language use.
+
+Task: Transform {language} text that is poorly structured, grammatically incorrect, awkwardly
+translated, or unnatural into well-formed, grammatically correct, and natural-sounding {language} text.
+
+Input Text: '{input_text}'
+
+Output Requirements:
+- Return complete rephrased text with no omissions wherever needed
+- Never return empty responses
+- Maintain original language with no English/Hindi mixing
+- Focus on grammatical correctness and natural flow
+- Do not provide explanations, notes, or meta-commentary
+- Keep the length close to the original text
 ```
+
+Early prompt versions that omitted explicit code-mixing prohibitions produced outputs interspersed with English terms, and prompts without length guidance produced truncated or verbose outputs. The constraints above address both.
 
 ---
 
-### Step 3 — LLM-as-Judge Semantic Consensus
+### Step 3 — Long-Context and Overlap Handling
 
-Deploy 2+ multilingual LLMs (e.g., Qwen-235B, DeepSeek-V3.1, GPT-OSS-120B) to independently evaluate and rank translations based on:
+Documents are chunked into segments {C₁, C₂, …, Cₙ}. For each chunk Cᵢ, the LLM receives:
 
-**Evaluation Criteria:**
+1. the specialist MT translation of Cᵢ,
+2. a compact summary of Cᵢ₋₁ (and optionally Cᵢ₋₂), and
+3. a brief English-context summary.
 
-**Semantic Fidelity**: Meaning preservation, idiomatic expressions, completeness.
-**Grammar & Fluency**: Correctness, readability, style.
-**Technical Correctness**: Domain terminology, code/mathematical syntax, consistency.
+Four configurations were tested: MT-only, LLM-only, LLM-refine-MT, and LLM-refine-MT with contextual overlap. The last achieves the best fluency and semantic fidelity for most languages.
 
-**Prompt Template for Judges:**
+---
+
+### Step 4 — Quality Classification and Selective Routing
+
+LLM refinement is computationally expensive, so documents are routed selectively by a two-level classifier:
+
+* A **hard-to-translate detector** flags pages as easy or hard (math, code, tables, poetry, dense jargon, culturally sensitive content) before translation.
+* After Stage 1 MT, a **translation quality classifier** scores fluency, adequacy, structure and terminology, and routes pages as **high-quality** (lightweight refinement), **low-quality**, or **hard** (deeper reasoning-based correction).
+* Low-quality and hard pages go to a multi-context reasoning LLM that sees the source chunk, the MT output, the refined candidate and the context summaries. A **verifier LLM** adjudicates, prioritizing meaning preservation over exact lexical fidelity.
+
+---
+
+### Step 5 — Production Deployment and LLM-Judge Verification
+
+In production, an LLM classifier pre-screens content type and pages are routed through the two-stage workflow above. Stratified per-tier samples then undergo **LLM-judge consensus verification**, where multiple judge LLMs independently score translations.
+
+**Judge prompt template:**
 
 ```text
 You are a multilingual quality evaluator for {target_language}.
@@ -126,65 +135,11 @@ Return JSON:
 }
 ```
 
-**Back-Translation Validation (Optional):**
-
-* Back-translate low-confidence outputs to English.
-* Compare embedding similarity to original.
-* Flag significant semantic drift for human review.
-
----
-
-### Step 4 — Human Evaluation & Finalization
-
-**Low-Score Flagging:**
-
-* Translations with `overall_score < 7.0` or high judge disagreement are prioritized for review.
-
-**Expert Review Process:**
-
-* Reviewed by 2–3 native evaluators for cultural, contextual, and domain accuracy.
-* Corrections logged with rationales for feedback loops.
-
-**Calibration & Consistency:**
-
-* Inter-annotator agreement (Cohen’s κ > 0.75)
-* Edge cases discussed to refine evaluation guidelines.
-
----
-
-### Step 5 — Long-Context Translation
-
-For documents exceeding standard context windows (>8K tokens):
-
-**Chunking Strategy:**
-
-* Translate segments hierarchically with 150–200 token overlaps.
-* Include concise summaries of previous segments for contextual continuity.
-
-**Post-Processing Coherence Check:**
-
-```text
-Verify:
-- Terminology consistency
-- Narrative flow
-- Absence of contradictions
-Return: {Coherent, Minor Edits, Major Revision}
-```
-
 ---
 
 ## Evaluation Metrics
 
-**chrF** – Character-level n-gram overlap; handles morphology-rich languages.
-**chrF++** – Character + word n-grams; preferred for Indic languages.
-**sacreBLEU** – Standard BLEU implementation; sensitive to word order.
-
-**Empirical Observations:**
-
-* Specialist MT → Generalist refinement: +2–4 chrF++
-* * LLM-as-judge: +1–2 chrF++
-* * Human validation: +3–5 chrF++
-* **Total improvement:** 6–11 chrF++ points over baseline.
+**chrF++** – character n-gram plus word n-gram F-score; preferred for morphologically rich Indic languages. All translation results in the paper are reported in chrF++.
 
 ---
 
@@ -232,7 +187,7 @@ python3 nllb_bench.py \
   --max_workers 121
 ```
 
-**Generalist LLM Refinement**
+**LLM Post-Correction**
 
 ```bash
 python3 async_trans.py \
@@ -245,7 +200,7 @@ python3 async_trans.py \
   --backend sglang-oai-chat \
   --port 30000 \
   --extra-request-body '{"temperature":0.7,"top_p":0.6,"top_k":20,"repetition_penalty":1.05,"max_tokens":1024}' \
-  --host 192.168.25.165 \
+  --host <host> \
   --target-langs as bn gu hi kn mai ml mr ne or pa sa sd ta te ur
 ```
 
@@ -265,97 +220,66 @@ python3 llm_judge.py \
 
 ## Results
 
-*Baseline MT:*
-<details>
-  <summary>📊 ai4bharat/IN22-Gen Results </summary>
+### IndicTrans2 before and after LLM post-correction (chrF++, FLORES)
 
-  ![English to assamese](https://github.com/user-attachments/assets/0e31225c-1f7c-4c45-9623-fe606eab9ede)
-  ![English to Gujarati](https://github.com/user-attachments/assets/799c71b7-43ab-4446-a734-1b2db9541d8f)
-  ![English to Hindi](https://github.com/user-attachments/assets/89fd3e1d-16c1-4515-9ed4-241339f10c0f)
-  ![English to Kannada](https://github.com/user-attachments/assets/0bf1ecb8-b4f3-45f6-bdfa-befbdd3ddd6c)
-  ![English to Maithili](https://github.com/user-attachments/assets/fe878c6b-3fea-4cb0-9ef3-29ecff9ae831)
-  ![English to Urdu](https://github.com/user-attachments/assets/9c5af4d3-15fd-43c9-a18e-352a24dee42f)
-  ![English to Telugu](https://github.com/user-attachments/assets/dc879224-7459-48e8-b450-6472c353db5b)
-  ![English to Tamil](https://github.com/user-attachments/assets/e8e2881d-9aa8-41e5-9174-958dc08bc5f4)
-  ![English to Sanskrit](https://github.com/user-attachments/assets/011efd7f-6ea1-437b-a6e5-400781851208)
-  ![English to Panjabi](https://github.com/user-attachments/assets/7e9e4492-3474-439f-85e3-c8ef680048b0)
-  ![English to Oriya](https://github.com/user-attachments/assets/701582b0-0871-4221-bca0-590f2e9ab05c)
-  ![English to Nepali](https://github.com/user-attachments/assets/7684b2ca-da07-4d52-ac12-10039d65eddf)
-  ![English to Marathi](https://github.com/user-attachments/assets/112981f7-6d53-422b-aaf8-15ebef488152)
-  ![English to Malayalam](https://github.com/user-attachments/assets/dd799a53-b23b-4c4c-b3f0-8c98aa4c97e2)
-  ![English to Bengali](https://github.com/user-attachments/assets/ebc63608-5907-4f25-a160-bfaaffb7ba6b)
-  
-</details>
+LLM-based post-correction improves IndicTrans2 on every language, by **+2.79 chrF++ on average** (range +1.26 to +3.88), including low-resource languages such as Sanskrit (27.70 to 30.24) and Sindhi (53.03 to 56.86).
 
----
+| Language | IndicTrans2 | IndicTrans2 + post-correction | Δ chrF++ |
+|---|---:|---:|---:|
+| Assamese (As) | 45.10 | **48.40** | +3.30 |
+| Bengali (Bn) | 48.67 | **51.71** | +3.04 |
+| Bodo (Brx) | 42.30 | **45.60** | +3.30 |
+| Dogri (Doi) | 44.10 | **47.20** | +3.10 |
+| Gujarati (Gu) | 53.38 | **55.53** | +2.15 |
+| Hindi (Hi) | 52.26 | **54.97** | +2.71 |
+| Kannada (Kn) | 55.62 | **58.71** | +3.09 |
+| Kashmiri (Ks) | 39.70 | **42.90** | +3.20 |
+| Konkani (Gom) | 41.20 | **44.50** | +3.30 |
+| Maithili (Mai) | 47.04 | **49.49** | +2.45 |
+| Malayalam (Ml) | 52.23 | **55.99** | +3.76 |
+| Manipuri (Mni) | 46.80 | **49.90** | +3.10 |
+| Marathi (Mr) | 49.33 | **51.00** | +1.67 |
+| Nepali (Ne) | 53.42 | **56.01** | +2.59 |
+| Odia (Or) | 50.47 | **52.28** | +1.81 |
+| Punjabi (Pa) | 49.82 | **51.08** | +1.26 |
+| Sanskrit (Sa) | 27.70 | **30.24** | +2.54 |
+| Santali (Sat) | 36.80 | **39.70** | +2.90 |
+| Sindhi (Sd) | 53.03 | **56.86** | +3.83 |
+| Tamil (Ta) | 54.77 | **58.65** | +3.88 |
+| Telugu (Te) | 49.19 | **50.88** | +1.69 |
+| Urdu (Ur) | 56.40 | **59.10** | +2.70 |
+| **Average** | 47.70 | **50.49** | **+2.79** |
 
-<details>
-  <summary>📊 google/IndicGenBench_flores_in Results </summary>
+Bodo, Dogri, Konkani, Kashmiri and Santali lack a FLORES devtest split.
 
-  ![Flores English to Urdu](https://github.com/user-attachments/assets/ded32975-25f8-4f45-a76c-7a429ae1d69b)  
-  ![Flores English to Telugu](https://github.com/user-attachments/assets/8e7aeca2-7063-4d03-a305-90ffe09eadb1)  
-  ![Flores English to Tamil](https://github.com/user-attachments/assets/b3125f26-6755-41a6-9c84-b1fba09c3d45)  
-  ![Flores English to Sanskrit](https://github.com/user-attachments/assets/914d3208-cb74-4a94-a69e-231c762aed58)  
-  ![Flores English to Punjabi](https://github.com/user-attachments/assets/1ffd4cf2-5112-4560-8539-0fd5d67a47ed)  
-  ![Flores English to Oriya](https://github.com/user-attachments/assets/ac4a2327-d824-48db-be8f-555b8f9bbbd8)  
-  ![Flores English to Nepali](https://github.com/user-attachments/assets/39c2b325-7953-4965-9b2b-18c4531f17b1)  
-  ![Flores English to Malayalam](https://github.com/user-attachments/assets/76cd4da6-dfc5-4c4f-81c1-5e0692a72307)  
-  ![Flores English to Maithili](https://github.com/user-attachments/assets/c91bbbf8-36f0-4194-a0b9-1a26eaf4b4d4)  
-  ![Flores English to Kannada](https://github.com/user-attachments/assets/25dfb25a-724b-420f-9aa3-a49d50ce6d85)  
-  ![Flores English to Hindi](https://github.com/user-attachments/assets/c12b2ffc-924a-41b5-a37c-9d219085b9a1)  
-  ![Flores English to Gujarati](https://github.com/user-attachments/assets/42d46e3b-4706-4e8b-82bf-e277b3cd2297)  
-  ![Flores English to Bengali](https://github.com/user-attachments/assets/8d0362ce-71a6-4f53-bf09-127f5edaef23)  
-  ![Flores English to Bengali (1)](https://github.com/user-attachments/assets/1669b853-9870-408b-9c45-640ee4323c04)  
-  ![Flores English to Assamese](https://github.com/user-attachments/assets/272b668d-2330-4f70-b386-ff0161c7a95e)  
+### Baseline specialist and generalist models without processing (chrF++)
 
-</details>
+| Model | As | Bn | Brx | Doi | Gu | Hi | Kn | Ks | Gom | Mai | Ml | Mni | Mr | Ne | Or | Pa | Sa | Sat | Sd | Ta | Te | Ur |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| NLLB-200-3.3B | -- | 48.58 | 38.50 | 40.20 | 52.10 | 52.67 | 56.87 | 35.80 | 37.40 | 44.08 | 49.35 | 39.60 | 47.03 | 45.93 | 46.05 | 49.48 | 25.28 | 33.90 | 52.49 | 54.37 | 48.24 | 54.20 |
+| NLLB-moe-54B | -- | 49.86 | 39.80 | 41.50 | 53.30 | 53.08 | 57.03 | 37.10 | 38.70 | 46.63 | 51.47 | 40.90 | 47.85 | 45.10 | 45.34 | 48.75 | 25.56 | 35.20 | 53.46 | 55.72 | 48.71 | 55.60 |
+| Hunyuan-MT | -- | 42.22 | 30.40 | 32.10 | 41.38 | 45.01 | 46.62 | 28.60 | 29.80 | 8.40 | 1.91 | 31.50 | 43.02 | 0.83 | 0.95 | 1.04 | 18.80 | 27.20 | 42.94 | 40.03 | 39.75 | 48.30 |
+| DeepSeek V3.1 Think | 39.10 | 44.30 | 34.70 | 36.40 | 47.95 | 47.56 | 53.12 | 32.90 | 34.10 | 39.59 | 46.86 | 35.80 | 44.80 | 47.23 | 44.34 | 46.80 | 25.37 | 31.60 | 48.90 | 48.68 | 46.05 | 50.70 |
+| Llama-4-Maverick-17B | 40.35 | 47.09 | 35.90 | 37.60 | 48.71 | 47.57 | 53.21 | 33.80 | 35.20 | 42.03 | 44.88 | 36.90 | 46.64 | 44.65 | 39.34 | 45.88 | 28.13 | 32.40 | 48.05 | 47.42 | 57.34 | 51.90 |
 
----
-
-*Post Enhancements on MT:*
-<details>
-  <summary>📊 Enhanced ai4bharat/IN22-Gen — Indic Trans2 (Enhanced with LLMs)</summary>
-
-  ![Enhanced IN22 Indic Trans2 results using Qwen_Qwen3-Next-80B-A3B-Instruct](https://github.com/user-attachments/assets/c745042d-1b5f-4b03-bbce-803f7f4c2891)  
-  ![Enhanced IN22 Indic Trans2 results using Qwen_Qwen3-235B-A22B-Instruct-2507](https://github.com/user-attachments/assets/0248271c-942d-4689-a1d9-392d2ae159be)  
-  ![Enhanced IN22 Indic Trans2 results using moonshotai_Kimi-K2-Instruct](https://github.com/user-attachments/assets/d83b6a7c-4e81-4019-abc4-a71d4e292d29)  
-  ![Enhanced IN22 Indic Trans2 results using deepseek-ai_DeepSeek-V3-0324](https://github.com/user-attachments/assets/5b9525fa-c2d0-4b0a-bf34-13aaa5a8bafd)  
-
-</details>
+No single model is best across all languages. Specialist MT (IndicTrans2, NLLB) is strong on well-resourced languages but struggles on Maithili and Sanskrit; general-purpose LLMs provide broader coverage but are uneven on low-resource languages and show semantic drift and code-mixing with English or Hindi; Hunyuan-MT fails catastrophically on Nepali, Odia and Punjabi.
 
 ---
 
-<details>
-  <summary>📊 Enhanced Flores — Indic Trans2 (Enhanced with LLMs)</summary>
+## Key Insights
 
-  ![Enhanced Flores Indic Trans2 results using Qwen_Qwen3-Next-80B-A3B-Instruct](https://github.com/user-attachments/assets/ade604c1-dd02-492f-ab1c-956a19ce7cd2)  
-  ![Enhanced Flores Indic Trans2 results using Qwen_Qwen3-235B-A22B-Instruct-2507](https://github.com/user-attachments/assets/26b5c058-7640-4e91-a09d-7392ff0cae89)  
-  ![Enhanced Flores Indic Trans2 results using moonshotai_Kimi-K2-Instruct](https://github.com/user-attachments/assets/9ee0f57d-86d2-40bf-8e30-ed92a399e0d9)  
+**Specialist + generalist synergy:**
 
-</details>
+* Specialist MT provides structural and terminology accuracy, and acts as a semantic anchor.
+* Generalist LLMs improve fluency, vocabulary richness and context understanding.
 
----
+**Per-language model selection:**
 
-## Key Insights & Best Practices
+* Choose the post-correction LLM per language using Indic-MMLU results; this keeps post-processing from introducing new errors through models with insufficient Indic proficiency.
 
-**Specialist + Generalist Synergy:**
+**Operational recommendations:**
 
-* Specialist MT ensures structural and terminology accuracy.
-* Generalist LLMs improve fluency and context understanding.
-
-**Multi-Judge Consensus:**
-
-* Ensemble of 2–3 judges reduces bias and aligns better with human judgments.
-
-**Operational Recommendations:**
-
-* Specialist MT + generalist refinement for all pipelines.
-* Human-in-the-loop for low-score or domain-critical content.
-* Long-context documents: hierarchical chunking + overlap + summary.
-
-**Performance Gains:**
-
-* Total improvement: **6–11 chrF++ points** across languages.
-* High-resource languages benefit more; low-resource require higher human validation.
-
----
+* Specialist MT followed by LLM post-correction for all pipelines.
+* Selective routing: lightweight refinement for high-quality pages, deeper reasoning-based correction for low-quality and hard pages.
+* Long documents: chunking with summaries of preceding chunks for contextual continuity.
+* LLM-judge consensus on stratified samples for batch acceptance.
