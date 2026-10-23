@@ -2,6 +2,8 @@
 
 This module provides comprehensive data organisation capabilities for managing large-scale document collections, specifically designed for LLM training data preparation. It handles both metadata ingestion into DataHub and file uploads to distributed storage systems.
 
+This folder accompanies the anonymous ACL ARR submission *MILA (Multilingual Indic Language Archive): A Dataset for Equitable Multilingual LLMs*. The design rationale, metadata schema, taxonomy and governance policies are described in Appendix F (Data Organisation) of the paper; the metadata-first acquisition architecture is described in Appendix E.
+
 ---
 
 # Table of Contents
@@ -11,6 +13,9 @@ This module provides comprehensive data organisation capabilities for managing l
   * [Overview](#overview)
 
     * [Deployed Architecture: JuiceFS + DataHub Integration](#deployed-architecture-juicefs--datahub-integration)
+    * [Why Data Organisation Matters for MILA](#why-data-organisation-matters-for-mila)
+    * [Metadata Schema and Taxonomy](#metadata-schema-and-taxonomy)
+    * [Governance and Versioning](#governance-and-versioning)
   * [Components](#components)
 
     * [1. DataHub Metadata Ingestion (ingestionpy)](#1-datahub-metadata-ingestion-ingestionpy)
@@ -78,6 +83,35 @@ This architecture enables:
 - **Lineage Tracking**: Full data provenance and transformation history
 - **Browse Navigation**: Hierarchical exploration of data collections
 - **Rich Search**: Full-text search across metadata fields, tags, and descriptions
+
+### Why Data Organisation Matters for MILA
+
+MILA spans 10T tokens across 22 scheduled Indic languages and English, drawn from heterogeneous sources (digitized books with varying OCR quality, government documents, web text, translated and synthetic data). Without systematic organisation, such a corpus risks being too brittle for production use (untracked licenses, leaked PII, undetected quality problems in small language–domain slices) and too opaque for scientific reproducibility (lost lineage, ad-hoc versioning, incomplete metadata). This module is the ingestion layer of the infrastructure that addresses these risks (Appendix F of the paper).
+
+### Metadata Schema and Taxonomy
+
+Every asset cataloged in DataHub is annotated along multiple dimensions (Appendix F.1):
+
+- **Domain**: e.g., Agriculture, Culture, Education, News, Business, Healthcare, Sports, Law, Governance, Tourism, BFSI
+- **Language and script**: distinguishes e.g. Hindi in Devanagari, Hindi transliterated to Latin script, and Urdu in Perso-Arabic script, and flags code-mixed content
+- **Modality**: plain text, PDF requiring OCR, images with embedded text, audio transcriptions, code mixed with natural language
+- **Quality tier**: OCR confidence, readability metrics, completeness indicators
+- **License and sensitivity**: intellectual-property restrictions, PII, culturally or legally sensitive content
+- **Source provenance**: contributing institutional archive, web domain or digitization project
+- **Pipeline stage**: raw ingested, cleaned, or experimental
+- **Lineage**: the transformation history of each asset
+
+A domain taxonomy spanning over 1,400 domains (organized under 12 broad domains) provides a controlled vocabulary for consistent annotation and subset construction, e.g. selecting all healthcare material or only Ayurvedic texts.
+
+### Governance and Versioning
+
+Beyond ingestion, the paper describes the governance and versioning layers built on this metadata (Appendix F.2 and F.3):
+
+- **Access and policy control**: Apache Ranger for role-based access, masking and audit logging; Open Policy Agent (OPA) for fine-grained, context-aware policy-as-code rules evaluated at ingestion, transformation, sampling and publication.
+- **License governance**: each source carries explicit license metadata, derived data inherits the most restrictive license, and policies filter datasets to license-compatible subsets. Non-permissive or uncertain items are quarantined for research-only use and excluded from training and redistribution.
+- **Versioning and reproducibility**: Delta Lake (ACID transactions, time travel) and DVC (pipeline-level tracking alongside code and configuration).
+
+This module covers the **ingestion side** (metadata into DataHub, files into JuiceFS); it does not by itself implement the Ranger, OPA, Delta Lake or DVC layers.
 
 ## Components
 
@@ -342,7 +376,7 @@ The module essentially **feeds the discovery system** by ensuring all documents 
 
 1. **Dataset Curation**: Easily find and select documents for training datasets
 2. **Quality Assessment**: Review metadata to understand document characteristics
-3. **Access Management**: Secure, time-limited access to training files
+3. **Access Management**: Presigned URLs for controlled access to training files
 4. **Reproducibility**: Track which documents were used in which training runs
 5. **Collaboration**: Share discoverable datasets across research teams
 
