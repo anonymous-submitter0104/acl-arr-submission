@@ -17,17 +17,18 @@ Croissant is a standardized, machine-readable metadata format for datasets. A si
 Croissant is especially useful for research releases, dataset cards, automated dataset loaders, and reproducibility audits.
 
 ---
-[MILA Neurips 2026 Submission](https://openreview.net/forum?id=FFWEtyB72h&referrer=%5BAuthor%20Console%5D(%2Fgroup%3Fid%3DNeurIPS.cc%2F2026%2FEvaluations_and_Datasets_Track%2FAuthors%23your-submissions))
+
+These files accompany the anonymous ACL ARR submission *MILA (Multilingual Indic Language Archive): A Dataset for Equitable Multilingual LLMs*. They describe the representative subsets available in this repository for reviewer access. Upon acceptance, the full open release (1T high-quality tokens across 22 scheduled Indic languages and English, plus the associated OCR, translation, persona and synthetic data) will be published with complete metadata.
 
 ## Datasets in this Repository
 
 | File | Dataset | Type |
 |---|---|---|
 | `croissant_rai_Curated-Web-Crawl (1).json` | [Curated Web Crawl](https://huggingface.co/datasets/anonymous000023/Curated-Web-Crawl) | Multilingual web text |
-| `croissant_rai_India-Centric_ImagendashText_Pairs.json` | [India-Centric Image–Text Pairs](https://github.com/anonymous-submitter0104/neurips-submission/tree/main/opensource-release/image-text-pairs) | OCR / vision-language |
-| `croissant_rai_indic-persona-hub.json` | [Indic PersonaHub](https://github.com/anonymous-submitter0104/neurips-submission/tree/main/opensource-release/indic-personahub) | Synthetic persona corpus |
-| `croissant_rai_indic-personahub-domain-qa-english.json` | [Indic PersonaHub Domain QA (English)](https://github.com/anonymous-submitter0104/neurips-submission/tree/main/opensource-release/training-corpus/indian-english) | Synthetic English QA |
-| `croissant_rai_Synthetic-Indic-Multi-Lingual-Dataset-From-IndicPe (1).json` | [Synthetic Indic Multi-Lingual Dataset](https://github.com/anonymous-submitter0104/neurips-submission/tree/main/opensource-release/training-corpus/parallel-corpus) | Multilingual synthetic instructions |
+| `croissant_rai_India-Centric_ImagendashText_Pairs.json` | [India-Centric Image–Text Pairs](https://github.com/anonymous-submitter0104/acl-arr-submission/tree/main/opensource-release/image-text-pairs) | OCR / vision-language |
+| `croissant_rai_indic-persona-hub.json` | [Indic PersonaHub](https://github.com/anonymous-submitter0104/acl-arr-submission/tree/main/opensource-release/indic-personahub) | Synthetic persona corpus |
+| `croissant_rai_indic-personahub-domain-qa-english.json` | [Indic PersonaHub Domain QA (English)](https://github.com/anonymous-submitter0104/acl-arr-submission/tree/main/opensource-release/training-corpus/indian-english) | Synthetic English QA |
+| `croissant_rai_Synthetic-Indic-Multi-Lingual-Dataset-From-IndicPe (1).json` | [Synthetic Indic Multi-Lingual Dataset](https://github.com/anonymous-submitter0104/acl-arr-submission/tree/main/opensource-release/training-corpus/parallel-corpus) | Multilingual synthetic instructions |
 
 ### Curated Web Crawl
 
@@ -68,7 +69,7 @@ Useful for inspecting the raw schema or checking a specific field definition.
 ```bash
 pip install mlcroissant
 
-python -m mlcroissant validate croissant_rai_Curated-Web-Crawl.json
+python -m mlcroissant validate "croissant_rai_Curated-Web-Crawl (1).json"
 ```
 
 Validation confirms that the metadata follows the Croissant specification, that file and column references are internally consistent, and that the dataset description is machine-readable. Recommended before any public or conference release.
@@ -98,7 +99,7 @@ for rs in meta.get("recordSet", []):
 import json
 from pathlib import Path
 
-path = Path("croissant_rai_Synthetic-Indic-Multi-Lingual-Dataset-From-IndicPe.json")
+path = Path("croissant_rai_Synthetic-Indic-Multi-Lingual-Dataset-From-IndicPe (1).json")
 meta = json.loads(path.read_text())
 
 for dist in meta.get("distribution", []):
