@@ -1,12 +1,13 @@
-# ISOB: Indian Synthetic OCR Benchmark – Small-Hard
+# ISOB-Small: Indic Synthetic OCR Benchmark
+
+ISOB is a synthetic benchmark for evaluating OCR systems on Indic documents. This folder accompanies the anonymous ACL ARR submission *MILA (Multilingual Indic Language Archive): A Dataset for Equitable Multilingual LLMs*; see Appendix C.4 (OCR Pipeline, ISOB) of the paper. The released **ISOB-Small** comprises **110 synthetically generated pages spanning 22 Indian languages**.
 
 ## Table of Contents
 
 1. [Motivation](#motivation)
 2. [What Makes ISOB Unique](#what-makes-isob-unique)
 3. [Benchmark Characteristics](#benchmark-characteristics)
-4. [Future Benchmark Releases](#future-benchmark-releases)
-5. [ISOB Construction Recipe](#isob-construction-recipe)
+4. [ISOB-Small Construction Recipe](#isob-small-construction-recipe)
 
    * [Input & Output](#input--output)
    * [Step 0: Initialize Seed Corpus](#step-0-initialize-seed-corpus)
@@ -18,9 +19,9 @@
    * [Step 6: Style Transformation](#step-6-style-transformation)
    * [Step 7: Image Processing Augmentation](#step-7-image-processing-augmentation)
    * [Step 8: Storage & Annotation](#step-8-storage--annotation)
-6. [Download ISOB-SMALL-HARD Dataset](#download-isob-small-hard-dataset)
-7. [End Result](#end-result)
-8. [License & Data Usage](#license--data-usage)
+5. [Download ISOB-Small Dataset](#download-isob-small-dataset)
+6. [End Result](#end-result)
+7. [License & Data Usage](#license--data-usage)
 
 ---
 
@@ -56,37 +57,24 @@ These materials are challenging to OCR due to their variability, rarity, and com
    * Dense or overlapping text
 
 3. **Controlled Ground Truth:**
-   Unlike web-scraped datasets, we maintain **precise ground truth** via synthetic reconstruction, enabling reliable evaluation using metrics like CER, WER, and F-score.
+   Unlike web-scraped datasets, we maintain **precise ground truth** via synthetic reconstruction, enabling reliable evaluation using metrics like CER, WER, PI-WER and character-level 3-gram F1.
 
 ---
 
 ## Benchmark Characteristics
 
 * **Languages Covered:** 22 Indian languages
-* **Artifacts:** Tables, math, figures, mixed-language pages
+* **Size:** 110 synthetically generated pages (ISOB-Small)
+* **Artifacts:** multi-column layouts, dense tables and figures, mathematical expressions with mixed scripts, watermarks and stamps, paper folds and shadows, font variations, and controlled blur levels
 * **Difficulty:** Small, hard-to-OCR dataset
 * **Ground Truth:** Full hOCR with language tags and metadata
-* **Synthetic Construction:** Designed to emulate real-world complexities
+* **Synthetic Construction:** Built with the document-centric synthetic generation methodology of Nayana, with additional controlled degradations injected to stress-test OCR robustness
+* **Copyright-compliant:** because the pages are synthetic, ISOB can be released for all 22 languages, whereas public release of OCR-extracted production text is limited to 10 languages by licensing restrictions on the underlying scans
+* **Metrics:** character error rate (CER), word error rate (WER), position-independent WER (PI-WER) and character-level 3-gram F1
 
 ---
 
-## Future Benchmark Releases
-
-1. **Indic-Real-OCR Benchmarks-IROB** (licensed for public release)
-
-   * Difficulty levels: Easy, Medium, Hard
-   * Dataset sizes: Small, Medium, Large
-
-2. **Indic-Synthetic-OCR Benchmarks-ISOB**
-
-   * Difficulty levels: Easy, Medium, Hard
-   * Dataset sizes: Small, Medium, Large
-
-The goal is to expand the benchmark series while keeping ground truth controlled, enabling reproducible evaluation and method development.
-
----
-
-## ISOB-SMALL-HARD Construction Recipe
+## ISOB-Small Construction Recipe
 
 ### Input & Output
 
@@ -183,13 +171,13 @@ The goal is to expand the benchmark series while keeping ground truth controlled
 
 ---
 
-## Download ISOB-SMALL-HARD Dataset
+## Download ISOB-Small Dataset
 
-This is a **representative sample set** of the full dataset, which will be released with **complete metadata annotations** and an **open-source license** upon paper acceptance.
+ISOB-Small (110 synthetically generated pages spanning 22 Indian languages) is released in this repository.
 
-- [Download Full Benchmark](https://github.com/anonymous-submitter0104/neurips-submission/tree/main/opensource-release/isob-small-hard)
+- [Download ISOB-Small](https://github.com/anonymous-submitter0104/acl-arr-submission/tree/main/opensource-release/isob-small-hard)
 
-> ⚠️ Please cite this repository if you use the dataset in your research.
+> Please cite the accompanying paper if you use the dataset in your research.
 
 
 ---
@@ -208,7 +196,7 @@ This enables the research community to benchmark OCR models effectively on India
 
 ## License & Data Usage
 
-* A Representative subset of Synthetic benchmark-ISOB-SMALL-HARD is published in this repository.
-* Upon acceptance of the paper, the full dataset will be made available under appropriate licensing.
+* ISOB is synthetically generated rather than sourced from licensed scans, so it is released across all 22 languages (unlike the OCR-extracted production data, which is limited to 10 languages).
+* ISOB-Small is published in this repository.
 
 ---
